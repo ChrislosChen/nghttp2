@@ -955,6 +955,11 @@ Http2Upstream::Http2Upstream(ClientHandler *handler)
   prep_.data = this;
   ev_prepare_start(handler_->get_loop(), &prep_);
 
+#if defined(TCP_INFO) && defined(TCP_NOTSENT_LOWAT)
+  auto conn = handler_->get_connection();
+  conn->tls_dyn_rec_warmup_threshold = 0;
+#endif // defined(TCP_INFO) && defined(TCP_NOTSENT_LOWAT)
+
   handler_->reset_upstream_read_timeout(
       get_config()->conn.upstream.timeout.http2_read);
 
@@ -1249,10 +1254,13 @@ ssize_t downstream_data_read_callback(nghttp2_session *session,
   // size left, we only write 256 bytes data.
   if (max_buffer_size <
       std::min(nread, static_cast<size_t>(256)) + 9 + buffer->rleft()) {
-    nread = std::min(nread, static_cast<size_t>(256));
-  } else {
-    nread = std::min(nread, max_buffer_size - 9 - buffer->rleft());
+    if (LOG_ENABLED(INFO)) {
+      ULOG(INFO, upstream) << "Buffer is almost full.  Skip write DATA";
+    }
+    return NGHTTP2_ERR_PAUSE;
   }
+
+  nread = std::min(nread, max_buffer_size - 9 - buffer->rleft());
 
   auto body_empty = body->rleft() == nread;
 
