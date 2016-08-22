@@ -781,8 +781,15 @@ size_t Connection::estimate_buffer_size() const {
   // http://www.slideshare.net/kazuho/programming-tcp-for-responsiveness
   // TODO 29 is TLS overhead
   auto writable_size = (avail_packets + 2) * (tcp_info.tcpi_snd_mss - 29);
-  // TODO is this required?
-  writable_size = std::max(writable_size, static_cast<uint32_t>(536 * 2));
+  if (writable_size > 16_k) {
+    writable_size = writable_size & ~(16_k - 1);
+  } else {
+    if (writable_size < 536) {
+      LOG(INFO) << "writable_size is too small: " << writable_size;
+    }
+    // TODO is this required?
+    writable_size = std::max(writable_size, static_cast<uint32_t>(536 * 2));
+  }
 
   uint32_t thres = tcp_info.tcpi_snd_cwnd * tcp_info.tcpi_snd_mss + 1;
 
