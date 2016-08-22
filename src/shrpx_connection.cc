@@ -779,7 +779,10 @@ size_t Connection::estimate_buffer_size() const {
                            : 0;
 
   // http://www.slideshare.net/kazuho/programming-tcp-for-responsiveness
-  // TODO 29 is TLS overhead
+  //
+  // TODO 29 (5 + 8 + 16) is TLS overhead for AES-GCM.  For
+  // CHACHA20_POLY1305, it is 21 since it does not need 8 bytes
+  // explicit nonce.
   auto writable_size = (avail_packets + 2) * (tcp_info.tcpi_snd_mss - 29);
   if (writable_size > 16_k) {
     writable_size = writable_size & ~(16_k - 1);
