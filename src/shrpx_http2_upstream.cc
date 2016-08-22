@@ -1249,9 +1249,6 @@ ssize_t downstream_data_read_callback(nghttp2_session *session,
 
   auto buffer = upstream->get_response_buf();
 
-  // At the moment, we have no way to stop sending frame depending on
-  // the buffer size.  As a workaround, if we don't have enough buffer
-  // size left, we only write 256 bytes data.
   if (max_buffer_size <
       std::min(nread, static_cast<size_t>(256)) + 9 + buffer->rleft()) {
     if (LOG_ENABLED(INFO)) {
