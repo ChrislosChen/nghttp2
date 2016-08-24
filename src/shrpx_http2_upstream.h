@@ -118,10 +118,6 @@ public:
 
   DefaultMemchunks *get_response_buf();
 
-  // Changes stream priority of |downstream|, which is assumed to be a
-  // pushed stream.
-  int adjust_pushed_stream_priority(Downstream *downstream);
-
   size_t get_max_buffer_size() const;
 
 private:
