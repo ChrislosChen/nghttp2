@@ -228,6 +228,34 @@ int on_header_callback2(nghttp2_session *session, const nghttp2_frame *frame,
 } // namespace
 
 namespace {
+int on_invalid_header_callback2(nghttp2_session *session,
+                                const nghttp2_frame *frame, nghttp2_rcbuf *name,
+                                nghttp2_rcbuf *value, uint8_t flags,
+                                void *user_data) {
+  auto upstream = static_cast<Http2Upstream *>(user_data);
+  auto downstream = static_cast<Downstream *>(
+      nghttp2_session_get_stream_user_data(session, frame->hd.stream_id));
+  if (!downstream) {
+    return 0;
+  }
+
+  if (LOG_ENABLED(INFO)) {
+    auto namebuf = nghttp2_rcbuf_get_buf(name);
+    auto valuebuf = nghttp2_rcbuf_get_buf(value);
+
+    ULOG(INFO, upstream) << "Invalid header field for stream_id="
+                         << frame->hd.stream_id << ": name=["
+                         << StringRef{namebuf.base, namebuf.len} << "], value=["
+                         << StringRef{valuebuf.base, valuebuf.len} << "]";
+  }
+
+  upstream->rst_stream(downstream, NGHTTP2_PROTOCOL_ERROR);
+
+  return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+}
+} // namespace
+
+namespace {
 int on_begin_headers_callback(nghttp2_session *session,
                               const nghttp2_frame *frame, void *user_data) {
   auto upstream = static_cast<Http2Upstream *>(user_data);
@@ -854,6 +882,9 @@ nghttp2_session_callbacks *create_http2_upstream_callbacks() {
   nghttp2_session_callbacks_set_on_header_callback2(callbacks,
                                                     on_header_callback2);
 
+  nghttp2_session_callbacks_set_on_invalid_header_callback2(
+      callbacks, on_invalid_header_callback2);
+
   nghttp2_session_callbacks_set_on_begin_headers_callback(
       callbacks, on_begin_headers_callback);
 
@@ -1340,8 +1371,8 @@ int Http2Upstream::send_reply(Downstream *downstream, const uint8_t *body,
   }
 
   if (!resp.fs.header(http2::HD_SERVER)) {
-    nva.push_back(
-        http2::make_nv_ls_nocopy("server", get_config()->http.server_name));
+    nva.push_back(http2::make_nv_ls_nocopy(
+        "server", StringRef{get_config()->http.server_name}));
   }
 
   for (auto &p : httpconf.add_response_headers) {
@@ -1392,7 +1423,8 @@ int Http2Upstream::error_reply(Downstream *downstream,
   auto nva = std::array<nghttp2_nv, 5>{
       {http2::make_nv_ls_nocopy(":status", response_status),
        http2::make_nv_ll("content-type", "text/html; charset=UTF-8"),
-       http2::make_nv_ls_nocopy("server", get_config()->http.server_name),
+       http2::make_nv_ls_nocopy("server",
+                                StringRef{get_config()->http.server_name}),
        http2::make_nv_ls_nocopy("content-length", content_length),
        http2::make_nv_ls_nocopy("date", date)}};
 
@@ -1539,7 +1571,8 @@ int Http2Upstream::on_downstream_header_complete(Downstream *downstream) {
   http2::copy_headers_to_nva_nocopy(nva, resp.fs.headers());
 
   if (!get_config()->http2_proxy) {
-    nva.push_back(http2::make_nv_ls_nocopy("server", httpconf.server_name));
+    nva.push_back(
+        http2::make_nv_ls_nocopy("server", StringRef{httpconf.server_name}));
   } else {
     auto server = resp.fs.header(http2::HD_SERVER);
     if (server) {
