@@ -762,7 +762,7 @@ void Connection::handle_tls_pending_read() {
   rlimit.handle_tls_pending_read();
 }
 
-size_t Connection::estimate_buffer_size() const {
+int Connection::get_tcp_hint(TCPHint *hint) const {
 #if defined(TCP_INFO) && defined(TCP_NOTSENT_LOWAT)
   struct tcp_info tcp_info;
   socklen_t tcp_info_len = sizeof(tcp_info);
@@ -771,7 +771,7 @@ size_t Connection::estimate_buffer_size() const {
   rv = getsockopt(fd, IPPROTO_TCP, TCP_INFO, &tcp_info, &tcp_info_len);
 
   if (rv != 0) {
-    return 32_k;
+    return -1;
   }
 
   auto avail_packets = tcp_info.tcpi_snd_cwnd > tcp_info.tcpi_unacked
@@ -794,30 +794,23 @@ size_t Connection::estimate_buffer_size() const {
     writable_size = std::max(writable_size, static_cast<uint32_t>(536 * 2));
   }
 
-  uint32_t thres = tcp_info.tcpi_snd_cwnd * tcp_info.tcpi_snd_mss + 1;
-
   if (LOG_ENABLED(INFO)) {
     LOG(INFO) << "snd_cwnd=" << tcp_info.tcpi_snd_cwnd
               << ", unacked=" << tcp_info.tcpi_unacked
               << ", snd_mss=" << tcp_info.tcpi_snd_mss
               << ", rtt=" << tcp_info.tcpi_rtt << "us"
-              << ", writable=" << writable_size << ", poll_thres=" << thres;
+              << ", rcv_space=" << tcp_info.tcpi_rcv_space
+              << ", writable=" << writable_size;
   }
 
-  rv = setsockopt(fd, IPPROTO_TCP, TCP_NOTSENT_LOWAT, &thres,
-                  static_cast<socklen_t>(sizeof(thres)));
+  hint->write_buffer_size = writable_size;
+  // TODO tcpi_rcv_space is considered as rwin, is that correct?
+  hint->rwin =
+      std::min(static_cast<uint32_t>(INT32_MAX), tcp_info.tcpi_rcv_space);
 
-  if (rv != 0) {
-    if (LOG_ENABLED(INFO)) {
-      auto error = errno;
-      LOG(INFO) << "setsockopt(TCP_NOTSENT_LOWAT, " << thres
-                << ") failed: errno=" << error;
-    }
-  }
-
-  return writable_size;
+  return 0;
 #else  // !defined(TCP_INFO) || !defined(TCP_NOTSENT_LOWAT)
-  return 32_k;
+  return -1;
 #endif // !defined(TCP_INFO) || !defined(TCP_NOTSENT_LOWAT)
 }
 

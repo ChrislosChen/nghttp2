@@ -2380,6 +2380,10 @@ int process_options(Config *config,
     }
   }
 
+  // TODO Enable them for experiment
+  http2conf.upstream.optimize_write_buffer_size = true;
+  http2conf.upstream.optimize_connection_window = true;
+
   auto &tlsconf = config->tls;
 
   if (tlsconf.npn_list.empty()) {

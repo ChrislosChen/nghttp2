@@ -958,7 +958,9 @@ Http2Upstream::Http2Upstream(ClientHandler *handler)
   }
 
   int32_t window_bits =
-      faddr->alt_mode ? 31 : http2conf.upstream.connection_window_bits;
+      faddr->alt_mode ? 31 : http2conf.upstream.optimize_connection_window
+                                 ? 16
+                                 : http2conf.upstream.connection_window_bits;
 
   if (window_bits != 16) {
     int32_t window_size = (1u << window_bits) - 1;
@@ -987,8 +989,22 @@ Http2Upstream::Http2Upstream(ClientHandler *handler)
   ev_prepare_start(handler_->get_loop(), &prep_);
 
 #if defined(TCP_INFO) && defined(TCP_NOTSENT_LOWAT)
-  auto conn = handler_->get_connection();
-  conn->tls_dyn_rec_warmup_threshold = 0;
+  if (http2conf.upstream.optimize_write_buffer_size) {
+    auto conn = handler_->get_connection();
+    conn->tls_dyn_rec_warmup_threshold = 0;
+
+    uint32_t pollout_thres = 1;
+    rv = setsockopt(conn->fd, IPPROTO_TCP, TCP_NOTSENT_LOWAT, &pollout_thres,
+                    static_cast<socklen_t>(sizeof(pollout_thres)));
+
+    if (rv != 0) {
+      if (LOG_ENABLED(INFO)) {
+        auto error = errno;
+        LOG(INFO) << "setsockopt(TCP_NOTSENT_LOWAT, " << pollout_thres
+                  << ") failed: errno=" << error;
+      }
+    }
+  }
 #endif // defined(TCP_INFO) && defined(TCP_NOTSENT_LOWAT)
 
   handler_->reset_upstream_read_timeout(
@@ -1040,9 +1056,39 @@ int Http2Upstream::on_read() {
 
 // After this function call, downstream may be deleted.
 int Http2Upstream::on_write() {
-  if (handler_->get_ssl()) {
+  int rv;
+  auto &http2conf = get_config()->http2;
+
+  if ((http2conf.upstream.optimize_write_buffer_size ||
+       http2conf.upstream.optimize_connection_window) &&
+      handler_->get_ssl()) {
     auto conn = handler_->get_connection();
-    max_buffer_size_ = std::min(MAX_BUFFER_SIZE, conn->estimate_buffer_size());
+    TCPHint hint;
+    rv = conn->get_tcp_hint(&hint);
+    if (rv == 0) {
+      if (http2conf.upstream.optimize_write_buffer_size) {
+        max_buffer_size_ = std::min(MAX_BUFFER_SIZE, hint.write_buffer_size);
+      }
+
+      if (http2conf.upstream.optimize_connection_window) {
+        auto faddr = handler_->get_upstream_addr();
+        if (!faddr->alt_mode) {
+          int32_t window_size =
+              (1u << http2conf.upstream.connection_window_bits) - 1;
+          window_size = std::min(window_size, hint.rwin);
+
+          rv = nghttp2_session_set_local_window_size(
+              session_, NGHTTP2_FLAG_NONE, 0, window_size);
+          if (rv != 0) {
+            if (LOG_ENABLED(INFO)) {
+              ULOG(INFO, this)
+                  << "nghttp2_session_set_local_window_size() with window_size="
+                  << window_size << " failed: " << nghttp2_strerror(rv);
+            }
+          }
+        }
+      }
+    }
   }
 
   for (;;) {

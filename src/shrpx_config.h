@@ -586,6 +586,8 @@ struct Http2Config {
     size_t window_bits;
     size_t connection_window_bits;
     size_t max_concurrent_streams;
+    bool optimize_write_buffer_size;
+    bool optimize_connection_window;
   } upstream;
   struct {
     struct {
