@@ -958,7 +958,7 @@ Http2Upstream::Http2Upstream(ClientHandler *handler)
   }
 
   int32_t window_bits =
-      faddr->alt_mode ? 31 : http2conf.upstream.optimize_connection_window
+      faddr->alt_mode ? 31 : http2conf.upstream.optimize_window_size
                                  ? 16
                                  : http2conf.upstream.connection_window_bits;
 
@@ -1060,7 +1060,7 @@ int Http2Upstream::on_write() {
   auto &http2conf = get_config()->http2;
 
   if ((http2conf.upstream.optimize_write_buffer_size ||
-       http2conf.upstream.optimize_connection_window) &&
+       http2conf.upstream.optimize_window_size) &&
       handler_->get_ssl()) {
     auto conn = handler_->get_connection();
     TCPHint hint;
@@ -1070,7 +1070,7 @@ int Http2Upstream::on_write() {
         max_buffer_size_ = std::min(MAX_BUFFER_SIZE, hint.write_buffer_size);
       }
 
-      if (http2conf.upstream.optimize_connection_window) {
+      if (http2conf.upstream.optimize_window_size) {
         auto faddr = handler_->get_upstream_addr();
         if (!faddr->alt_mode) {
           int32_t window_size =

@@ -287,6 +287,10 @@ constexpr auto SHRPX_OPT_BACKEND_MAX_BACKOFF =
 constexpr auto SHRPX_OPT_SERVER_NAME = StringRef::from_lit("server-name");
 constexpr auto SHRPX_OPT_NO_SERVER_REWRITE =
     StringRef::from_lit("no-server-rewrite");
+constexpr auto SHRPX_OPT_FRONTEND_HTTP2_OPTIMIZE_WRITE_BUFFER_SIZE =
+    StringRef::from_lit("frontend-http2-optimize-write-buffer-size");
+constexpr auto SHRPX_OPT_FRONTEND_HTTP2_OPTIMIZE_WINDOW_SIZE =
+    StringRef::from_lit("frontend-http2-optimize-window-size");
 
 constexpr size_t SHRPX_OBFUSCATED_NODE_LENGTH = 8;
 
@@ -587,7 +591,7 @@ struct Http2Config {
     size_t connection_window_bits;
     size_t max_concurrent_streams;
     bool optimize_write_buffer_size;
-    bool optimize_connection_window;
+    bool optimize_window_size;
   } upstream;
   struct {
     struct {
@@ -811,6 +815,8 @@ enum {
   SHRPX_OPTID_FRONTEND_HTTP2_DUMP_REQUEST_HEADER,
   SHRPX_OPTID_FRONTEND_HTTP2_DUMP_RESPONSE_HEADER,
   SHRPX_OPTID_FRONTEND_HTTP2_MAX_CONCURRENT_STREAMS,
+  SHRPX_OPTID_FRONTEND_HTTP2_OPTIMIZE_WINDOW_SIZE,
+  SHRPX_OPTID_FRONTEND_HTTP2_OPTIMIZE_WRITE_BUFFER_SIZE,
   SHRPX_OPTID_FRONTEND_HTTP2_READ_TIMEOUT,
   SHRPX_OPTID_FRONTEND_HTTP2_SETTINGS_TIMEOUT,
   SHRPX_OPTID_FRONTEND_HTTP2_WINDOW_BITS,
