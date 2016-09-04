@@ -805,8 +805,7 @@ int Connection::get_tcp_hint(TCPHint *hint) const {
 
   hint->write_buffer_size = writable_size;
   // TODO tcpi_rcv_space is considered as rwin, is that correct?
-  hint->rwin =
-      std::min(static_cast<uint32_t>(INT32_MAX), tcp_info.tcpi_rcv_space);
+  hint->rwin = tcp_info.tcpi_rcv_space;
 
   return 0;
 #else  // !defined(TCP_INFO) || !defined(TCP_NOTSENT_LOWAT)

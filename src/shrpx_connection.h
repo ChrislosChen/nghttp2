@@ -68,7 +68,7 @@ struct TLSConnection {
 
 struct TCPHint {
   size_t write_buffer_size;
-  int32_t rwin;
+  uint32_t rwin;
 };
 
 template <typename T> using EVCb = void (*)(struct ev_loop *, T *, int);

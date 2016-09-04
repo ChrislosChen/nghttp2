@@ -1075,7 +1075,8 @@ int Http2Upstream::on_write() {
         if (!faddr->alt_mode) {
           int32_t window_size =
               (1u << http2conf.upstream.connection_window_bits) - 1;
-          window_size = std::min(window_size, hint.rwin);
+          window_size =
+              std::min(static_cast<uint32_t>(window_size), hint.rwin * 2);
 
           rv = nghttp2_session_set_local_window_size(
               session_, NGHTTP2_FLAG_NONE, 0, window_size);
